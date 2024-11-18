@@ -72,7 +72,6 @@ impl ByteAllocator for LabByteAllocator {
 }
 
 enum HeapAllocator {
-    Slab40Bytes,
     Slab64Bytes,
     Slab128Bytes,
     Slab256Bytes,
@@ -85,7 +84,6 @@ enum HeapAllocator {
 }
 
 pub struct Heap {
-    slab_40_bytes: Slab<40>,
     slab_64_bytes: Slab<64>,
     slab_128_bytes: Slab<128>,
     slab_256_bytes: Slab<256>,
@@ -119,7 +117,6 @@ impl Heap {
             "Heap size should be a multiple of minimum heap size"
         );
         Heap {
-            slab_40_bytes: Slab::<40>::new(0, 0),
             slab_64_bytes: Slab::<64>::new(0, 0),
             slab_128_bytes: Slab::<128>::new(0, 0),
             slab_256_bytes: Slab::<256>::new(0, 0),
@@ -166,7 +163,6 @@ impl Heap {
     /// given address is invalid.
     unsafe fn _grow(&mut self, mem_start_addr: usize, mem_size: usize, slab: HeapAllocator) {
         match slab {
-            HeapAllocator::Slab40Bytes => self.slab_64_bytes.grow(mem_start_addr, mem_size),
             HeapAllocator::Slab64Bytes => self.slab_64_bytes.grow(mem_start_addr, mem_size),
             HeapAllocator::Slab128Bytes => self.slab_128_bytes.grow(mem_start_addr, mem_size),
             HeapAllocator::Slab256Bytes => self.slab_256_bytes.grow(mem_start_addr, mem_size),
@@ -187,9 +183,6 @@ impl Heap {
     /// The runtime is in `O(1)` for chunks of size <= 4096, and `O(n)` when chunk size is > 4096,
     pub fn allocate(&mut self, layout: Layout) -> Result<usize, alloc::alloc::AllocError> {
         match Heap::layout_to_allocator(&layout) {
-            HeapAllocator::Slab40Bytes => self
-                .slab_40_bytes
-                .allocate(layout, &mut self.buddy_allocator),
             HeapAllocator::Slab64Bytes => self
                 .slab_64_bytes
                 .allocate(layout, &mut self.buddy_allocator),
@@ -235,7 +228,6 @@ impl Heap {
     /// given address is invalid.
     pub unsafe fn deallocate(&mut self, ptr: usize, layout: Layout) {
         match Heap::layout_to_allocator(&layout) {
-            HeapAllocator::Slab40Bytes => self.slab_40_bytes.deallocate(ptr),
             HeapAllocator::Slab64Bytes => self.slab_64_bytes.deallocate(ptr),
             HeapAllocator::Slab128Bytes => self.slab_128_bytes.deallocate(ptr),
             HeapAllocator::Slab256Bytes => self.slab_256_bytes.deallocate(ptr),
@@ -254,7 +246,6 @@ impl Heap {
     /// allocation created with the specified `layout`.
     pub fn usable_size(&self, layout: Layout) -> (usize, usize) {
         match Heap::layout_to_allocator(&layout) {
-            HeapAllocator::Slab40Bytes => (layout.size(), 40),
             HeapAllocator::Slab64Bytes => (layout.size(), 64),
             HeapAllocator::Slab128Bytes => (layout.size(), 128),
             HeapAllocator::Slab256Bytes => (layout.size(), 256),
@@ -271,8 +262,6 @@ impl Heap {
     fn layout_to_allocator(layout: &Layout) -> HeapAllocator {
         if layout.size() > 8192 {
             HeapAllocator::BuddyAllocator
-        } else if layout.size() <= 40 && layout.align() <= 40 {
-            HeapAllocator::Slab40Bytes
         } else if layout.size() <= 64 && layout.align() <= 64 {
             HeapAllocator::Slab64Bytes
         } else if layout.size() <= 128 && layout.align() <= 128 {
@@ -294,8 +283,7 @@ impl Heap {
 
     /// Returns total memory size in bytes of the heap.
     pub fn total_bytes(&self) -> usize {
-        self.slab_40_bytes.total_blocks() * 40
-            + self.slab_64_bytes.total_blocks() * 64
+        self.slab_64_bytes.total_blocks() * 64
             + self.slab_128_bytes.total_blocks() * 128
             + self.slab_256_bytes.total_blocks() * 256
             + self.slab_512_bytes.total_blocks() * 512
@@ -308,8 +296,7 @@ impl Heap {
 
     /// Returns allocated memory size in bytes.
     pub fn used_bytes(&self) -> usize {
-        self.slab_40_bytes.used_blocks() * 40
-            + self.slab_64_bytes.used_blocks() * 64
+        self.slab_64_bytes.used_blocks() * 64
             + self.slab_128_bytes.used_blocks() * 128
             + self.slab_256_bytes.used_blocks() * 256
             + self.slab_512_bytes.used_blocks() * 512
